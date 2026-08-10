@@ -3,21 +3,23 @@ import pandas as pd
 
 st.set_page_config(page_title="Valuify - DCF Model", layout="wide")
 st.title("💰 Valuify DCF Model")
-st.caption("Professional DCF Valuation Tool v2.1")
+st.caption("Professional DCF Valuation Tool v2.2")
 
 uploaded_file = st.file_uploader("Upload your DCF_Excel.xlsx", type=["xlsx"])
 
 if uploaded_file:
     try:
-        # Read and FORCE clean the data
-        df = pd.read_excel(uploaded_file, sheet_name="Assumptions")
+        # FIX: skip the first row because your Excel has blank header
+        df = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=0)
+        
+        # If it still says Unnamed, force it
+        if 'Unnamed: 0' in df.columns:
+            df = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=1)
+            
         df.columns = [str(c).strip() for c in df.columns]
-        df.iloc[:, 0] = df.iloc[:, 0].astype(str).str.strip() # Clean first column
         
         st.success("DCF_Excel.xlsx loaded successfully!")
-        st.write("Detected columns:", df.columns.tolist()) # Debug line
 
-        # Convert to dict so we don't rely on exact 'Metric' name
         assumptions = dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
         
         base_revenue = float(assumptions['Revenue'])
@@ -43,7 +45,6 @@ if uploaded_file:
             price_per_share = equity_value / shares
             return price_per_share
 
-        # SCENARIOS
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -57,13 +58,9 @@ if uploaded_file:
         with col3:
             bull_price = calculate_dcf(0.20, -0.01)
             st.metric("BULL CASE", f"₹{bull_price:,.2f}", "+20% Growth, -1% WACC")
-        
-        st.divider()
-        st.subheader("Your Inputs")
-        st.dataframe(df, use_container_width=True, hide_index=True)
 
     except Exception as e:
         st.error(f"Error: {e}")
-        st.info("Make sure sheet name is 'Assumptions' and first column has: Revenue, Growth, etc")
+        st.info("Check if 'Assumptions' sheet has Revenue, Growth in first column")
 else:
     st.info("Upload your DCF_Excel.xlsx to see valuation")
