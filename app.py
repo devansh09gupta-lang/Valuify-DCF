@@ -3,31 +3,38 @@ import pandas as pd
 
 st.set_page_config(page_title="Valuify - DCF Model", layout="wide")
 st.title("💰 Valuify DCF Model")
-st.caption("Professional DCF Valuation Tool v2.2")
+st.caption("Professional DCF Valuation Tool v2.3")
 
 uploaded_file = st.file_uploader("Upload your DCF_Excel.xlsx", type=["xlsx"])
 
 if uploaded_file:
     try:
-        # FIX: skip the first row because your Excel has blank header
-        df = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=0)
+        # READ WITHOUT HEADER FIRST
+        df_raw = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=None)
+        st.write("Raw Excel data:")
+        st.dataframe(df_raw) # This will show us exactly what pandas sees
         
-        # If it still says Unnamed, force it
-        if 'Unnamed: 0' in df.columns:
-            df = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=1)
-            
+        # Now set row 1 as header because your "Metric" is in row 2 in Excel
+        df = pd.read_excel(uploaded_file, sheet_name="Assumptions", header=1)
         df.columns = [str(c).strip() for c in df.columns]
         
         st.success("DCF_Excel.xlsx loaded successfully!")
 
-        assumptions = dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
+        # Create dict from column 0 and 1
+        assumptions = {}
+        for i in range(len(df)):
+            key = str(df.iloc[i, 0]).strip()
+            val = df.iloc[i, 1]
+            assumptions[key] = val
         
-        base_revenue = float(assumptions['Revenue'])
-        growth = float(assumptions['Growth'])
-        margin = float(assumptions['EBITDA_Margin'])
-        wacc = float(assumptions['WACC'])
-        tv_growth = float(assumptions['TV_Growth'])
-        shares = float(assumptions['Shares'])
+        st.write("Found assumptions:", assumptions) # Debug
+
+        base_revenue = float(assumptions.get('Revenue', 0))
+        growth = float(assumptions.get('Growth', 0))
+        margin = float(assumptions.get('EBITDA_Margin', 0))
+        wacc = float(assumptions.get('WACC', 0))
+        tv_growth = float(assumptions.get('TV_Growth', 0))
+        shares = float(assumptions.get('Shares', 1))
 
         def calculate_dcf(growth_adj, wacc_adj):
             years = 5
@@ -46,21 +53,11 @@ if uploaded_file:
             return price_per_share
 
         col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            bear_price = calculate_dcf(-0.20, 0.02)
-            st.metric("BEAR CASE", f"₹{bear_price:,.2f}", "-20% Growth, +2% WACC")
-            
-        with col2:
-            base_price = calculate_dcf(0, 0)
-            st.metric("BASE CASE", f"₹{base_price:,.2f}", "Base")
-            
-        with col3:
-            bull_price = calculate_dcf(0.20, -0.01)
-            st.metric("BULL CASE", f"₹{bull_price:,.2f}", "+20% Growth, -1% WACC")
+        with col1: st.metric("BEAR CASE", f"₹{calculate_dcf(-0.20, 0.02):,.2f}")
+        with col2: st.metric("BASE CASE", f"₹{calculate_dcf(0, 0):,.2f}")
+        with col3: st.metric("BULL CASE", f"₹{calculate_dcf(0.20, -0.01):,.2f}")
 
     except Exception as e:
         st.error(f"Error: {e}")
-        st.info("Check if 'Assumptions' sheet has Revenue, Growth in first column")
 else:
     st.info("Upload your DCF_Excel.xlsx to see valuation")
