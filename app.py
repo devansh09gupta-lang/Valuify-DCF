@@ -101,19 +101,23 @@ if st.button("RUN SCENARIO WAR", type="primary"):
 st.divider()
 st.subheader("📄 Pro Feature")
 
-if st.session_state.fv > 0:
-    if razorpay_ready:
-        if st.button(f"Download {company} Report PDF - ₹499"):
+if razorpay_ready:
+    if st.button(f"Download {company} Report PDF - ₹499"):
+        if st.session_state.fv > 0: # Only run if user calculated FV
             try:
                 order = client.order.create({"amount": 49900, "currency": "INR", "payment_capture": 1})
-                st.info("After payment, click download below")
+                st.info("Payment system ready. Generating report...")
+                
+                # Calculate upside here safely
+                upside = ((st.session_state.fv - cmp) / cmp) * 100
                 rec = "BUY" if upside>20 else "SELL" if upside<-20 else "HOLD"
+                
                 pdf_file = create_pdf(company, st.session_state.fv, cmp, rec)
                 with open(pdf_file, "rb") as file:
-                    st.download_button("Download Your Paid Report", file, file_name=pdf_file)
+                    st.download_button("⬇️ Download Your Paid Report", file, file_name=pdf_file)
             except Exception as e:
                 st.error(f"Payment Error: {e}")
-    else:
-        st.error("Add Razorpay Keys in Settings > Secrets to enable this")
+        else:
+            st.warning("Please click 'RUN SCENARIO WAR' first to generate a valuation")
 else:
-    st.warning("First run 'SCENARIO WAR' to generate a report")
+    st.error("Add Razorpay Keys in Settings > Secrets to enable this")
