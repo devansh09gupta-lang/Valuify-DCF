@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-from fpdf import FPDF # pip install fpdf
+from fpdf import FPDF # pip install fpdf2
 import razorpay # pip install razorpay
 
 st.set_page_config(page_title="Valuify TCS", layout="wide")
