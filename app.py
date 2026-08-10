@@ -3,9 +3,10 @@ import pandas as pd
 
 st.set_page_config(page_title="Valuify - DCF Model", layout="wide")
 st.title("💰 Valuify DCF Model")
-st.caption("Professional DCF Valuation Tool v2.5")
+st.caption("Professional DCF Valuation Tool v2.6 - Buy/Sell/Hold")
 
 uploaded_file = st.file_uploader("Upload your DCF_Excel.xlsx", type=["xlsx"])
+cmp = st.number_input("Enter Current Market Price CMP", value=3950.0) # NEW
 
 if uploaded_file:
     try:
@@ -31,39 +32,38 @@ if uploaded_file:
             g = growth + growth_adj
             m = margin + margin_adj
             w = wacc + wacc_adj
-            
             revenues = [base_revenue * (1 + g) ** i for i in range(1, years+1)]
             ebitda = [r * m for r in revenues]
             fcf = [e * 0.7 for e in ebitda]
-            
             discount_factors = [(1 + w) ** i for i in range(1, years+1)]
             pv_fcf = sum([f / d for f, d in zip(fcf, discount_factors)])
-            
             tv = (fcf[-1] * (1 + tv_growth)) / (w - tv_growth)
             pv_tv = tv / discount_factors[-1]
-            
             equity_value = pv_fcf + pv_tv
-            price_per_share = equity_value / shares
-            return price_per_share
+            return equity_value / shares
 
-        col1, col2, col3 = st.columns(3)
+        bear_price = calculate_dcf(-0.10, 0.03, -0.05)
+        base_price = calculate_dcf(0, 0, 0)
+        bull_price = calculate_dcf(0.10, -0.02, 0.05)
         
-        with col1:
-            bear_price = calculate_dcf(-0.10, 0.03, -0.05) # -10% growth, +3% WACC, -5% margin
-            st.metric("BEAR CASE", f"₹{bear_price:,.2f}", "Pessimistic")
-            
-        with col2:
-            base_price = calculate_dcf(0, 0, 0)
-            st.metric("BASE CASE", f"₹{base_price:,.2f}", "Base")
-            
-        with col3:
-            bull_price = calculate_dcf(0.10, -0.02, 0.05) # +10% growth, -2% WACC, +5% margin
-            st.metric("BULL CASE", f"₹{bull_price:,.2f}", "Optimistic")
-            
+        col1, col2, col3 = st.columns(3)
+        col1.metric("BEAR CASE", f"₹{bear_price:,.2f}")
+        col2.metric("BASE CASE", f"₹{base_price:,.2f}")
+        col3.metric("BULL CASE", f"₹{bull_price:,.2f}")
+        
         st.divider()
-        st.caption(f"Base inputs: Revenue={base_revenue}, Growth={growth*100}%, WACC={wacc*100}%")
+        # BUY/SELL/HOLD LOGIC
+        upside = ((base_price - cmp) / cmp) * 100
+        
+        if upside > 20:
+            st.success(f"**RECOMMENDATION: BUY** | Upside: {upside:.1f}%")
+            st.write(f"Fair Value ₹{base_price:,.2f} is {upside:.1f}% above CMP ₹{cmp:,.2f}")
+        elif upside < -20:
+            st.error(f"**RECOMMENDATION: SELL/AVOID** | Downside: {abs(upside):.1f}%")
+            st.write(f"Fair Value ₹{base_price:,.2f} is {abs(upside):.1f}% below CMP ₹{cmp:,.2f}")
+        else:
+            st.warning(f"**RECOMMENDATION: HOLD** | Upside: {upside:.1f}%")
+            st.write(f"Fair Value ₹{base_price:,.2f} is close to CMP ₹{cmp:,.2f}")
 
     except Exception as e:
         st.error(f"Error: {e}")
-else:
-    st.info("Upload your DCF_Excel.xlsx to see valuation")
