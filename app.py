@@ -9,8 +9,8 @@ st.title("💰 Valuify v4.1 - TCS DCF Engine")
 st.caption("Scenario War + India Mode + Paid Reports")
 
 # 1. RAZORPAY SETUP - Replace with your keys
-RAZORPAY_KEY_ID = "rzp_test_YourKeyHere" 
-RAZORPAY_KEY_SECRET = "YourSecretHere"
+RAZORPAY_KEY_ID = "rzp_test_rzp_test_TOAA6IplmBNlqB" 
+RAZORPAY_KEY_SECRET = "lSzvaerJqwVpwbA7L116JRl7"
 client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # TCS MASTER DATA
