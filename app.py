@@ -89,67 +89,91 @@ if page == "Home":
         st.switch_page("app.py") # will go to Valuation Tool
 
 # --- PAGE 2: VALUATION TOOL ---
+# --- PAGE 2: VALUATION TOOL ---
 elif page == "Valuation Tool":
-    st.title("⚔️ Scenario War DCF Tool")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        st.header("Inputs")
-        company = st.selectbox("Select Company", df["Company"])
-        cmp = st.number_input("Enter Current Market Price CMP", value=3950.00, step=10.0)
-        selected_data = df[df["Company"] == company].iloc[0]
+    st.title("⚔️ Upload Your Excel & Run DCF")
+    st.write("Upload an Excel with columns: `Company, Revenue, FCF_Margin, Analyst_Growth, CMP`")
     
-    with col2:
-        st.header("Set Your Assumptions")
-        user_growth = st.slider("YOUR Growth View", 0.0, 0.25, 0.12, 0.01)
-        market_growth = st.slider("MARKET Implied Growth", 0.0, 0.25, 0.11, 0.01)
-        analyst_growth = st.slider("ANALYST Growth View", 0.0, 0.25, float(selected_data["Analyst_Growth"]), 0.01)
+    uploaded_file = st.file_uploader("📁 Choose an Excel file", type=["xlsx", "xls"])
+    
+    if uploaded_file is not None:
+        try:
+            user_df = pd.read_excel(uploaded_file)
+            st.success("File Uploaded Successfully!")
+            st.dataframe(user_df.head())
+            
+            # Let user select company from their uploaded file
+            company = st.selectbox("Select Company from your file", user_df["Company"])
+            selected_data = user_df[user_df["Company"] == company].iloc[0]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                cmp = st.number_input("Enter/Confirm CMP", value=float(selected_data["CMP"]), step=10.0)
+            with col2:
+                st.metric("Revenue in File", f"Rs.{selected_data['Revenue']:,.0f} Cr")
+            
+            st.divider()
+            st.header("Set Your Assumptions")
+            user_growth = st.slider("YOUR Growth View", 0.0, 0.25, 0.12, 0.01)
+            market_growth = st.slider("MARKET Implied Growth", 0.0, 0.25, 0.11, 0.01)
+            analyst_growth = st.slider("ANALYST Growth View", 0.0, 0.25, float(selected_data["Analyst_Growth"]), 0.01)
+            
+            if st.button("RUN SCENARIO WAR", type="primary"):
+                revenue = selected_data["Revenue"]
+                margin = selected_data["FCF_Margin"]
+                
+                fv_user = calc_fv(revenue, margin, user_growth)
+                fv_market = calc_fv(revenue, margin, market_growth)
+                upside = ((fv_user - cmp) / cmp) * 100
+                
+                # RECOMMENDATION LOGIC
+                if upside > 15: 
+                    rec = "BUY"
+                    color = "🟢"
+                elif upside < -15: 
+                    rec = "SELL"
+                    color = "🔴"
+                else: 
+                    rec = "HOLD"
+                    color = "🟡"
+                
+                st.session_state.update({
+                    "fv": fv_user, "cmp": cmp, "upside": upside, "rec": rec, "fv_market": fv_market,
+                    "user_g": user_growth, "market_g": market_growth, "analyst_g": analyst_growth, "company": company
+                })
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("YOUR Fair Value", f"Rs.{fv_user:,.0f}")
+                col2.metric("MARKET Implied FV", f"Rs.{fv_market:,.0f}")
+                col3.metric(f"{color} Verdict", f"{rec} {upside:.1f}%")
+                
+                # PRO FEATURE
+                st.divider()
+                st.subheader("📄 Get Pro Report")
+                if razorpay_ready:
+                    if st.button(f"Download {company} PDF + Excel - Rs.499"):
+                        pdf_file = create_pdf(company, fv_user, cmp, rec, upside)
+                        excel_file = create_excel(company, fv_user, fv_market, cmp, upside, rec, user_growth, market_growth, analyst_growth)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            with open(pdf_file, "rb") as file: st.download_button("⬇️ Download PDF", file, file_name=pdf_file)
+                        with col2:
+                            with open(excel_file, "rb") as file: st.download_button("⬇️ Download Excel Model", file, file_name=excel_file)
         
-        if st.button("RUN SCENARIO WAR", type="primary"):
-            revenue = selected_data["Revenue"]
-            margin = selected_data["FCF_Margin"]
-            
-            fv_user = calc_fv(revenue, margin, user_growth)
-            fv_market = calc_fv(revenue, margin, market_growth)
-            upside = ((fv_user - cmp) / cmp) * 100
-            
-            # NEW RECOMMENDATION LOGIC
-            if upside > 15: 
-                rec = "BUY"
-                color = "🟢"
-            elif upside < -15: 
-                rec = "SELL"
-                color = "🔴"
-            else: 
-                rec = "HOLD"
-                color = "🟡"
-            
-            st.session_state.update({
-                "fv": fv_user, "cmp": cmp, "upside": upside, "rec": rec, "fv_market": fv_market,
-                "user_g": user_growth, "market_g": market_growth, "analyst_g": analyst_growth, "company": company
-            })
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("YOUR Fair Value", f"Rs.{fv_user:,.0f}")
-            col2.metric("MARKET Implied FV", f"Rs.{fv_market:,.0f}")
-            col3.metric(f"{color} Verdict", f"{rec} {upside:.1f}%")
-
-    # --- PRO FEATURE ---
-    if "fv" in st.session_state and st.session_state.fv > 0:
-        st.divider()
-        st.subheader("📄 Get Pro Report")
-        if razorpay_ready:
-            if st.button(f"Download {st.session_state.company} PDF + Excel - Rs.499"):
-                pdf_file = create_pdf(st.session_state.company, st.session_state.fv, st.session_state.cmp, st.session_state.rec, st.session_state.upside)
-                excel_file = create_excel(st.session_state.company, st.session_state.fv, st.session_state.fv_market, st.session_state.cmp, 
-                                          st.session_state.upside, st.session_state.rec, st.session_state.user_g, st.session_state.market_g, st.session_state.analyst_g)
-                col1, col2 = st.columns(2)
-                with col1:
-                    with open(pdf_file, "rb") as file: st.download_button("⬇️ Download PDF", file, file_name=pdf_file)
-                with col2:
-                    with open(excel_file, "rb") as file: st.download_button("⬇️ Download Excel", file, file_name=excel_file)
-                st.success("Reports Generated!")
-        else:
-            st.error("Add Razorpay Keys to enable downloads")
+        except Exception as e:
+            st.error(f"Error reading file. Make sure columns are: Company, Revenue, FCF_Margin, Analyst_Growth, CMP. Error: {e}")
+    
+    else:
+        st.info("👆 Upload your Excel to start. Or download our sample template below")
+        # Give sample template
+        sample_data = pd.DataFrame({
+            "Company": ["WIPRO", "TCS"],
+            "Revenue": [91000, 240000],
+            "FCF_Margin": [0.18, 0.22],
+            "Analyst_Growth": [0.09, 0.09],
+            "CMP": [450, 3800]
+        })
+        st.download_button("⬇️ Download Sample Excel Template", sample_data.to_excel("sample.xlsx", index=False), file_name="Valuify_Sample_Template.xlsx")
 
 # --- PAGE 3: PRICING ---
 elif page == "Pricing":
