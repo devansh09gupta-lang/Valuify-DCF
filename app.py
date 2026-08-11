@@ -91,79 +91,33 @@ if page == "Home":
 # --- PAGE 2: VALUATION TOOL ---
 # --- PAGE 2: VALUATION TOOL ---
 elif page == "Valuation Tool":
-    st.title("⚔️ Upload Your Excel & Run DCF")
-    st.write("Upload any format: Multi-company table OR Single-company vertical sheet")
+    st.title("⚔️ Scenario War DCF Tool")
     
-    uploaded_file = st.file_uploader("📁 Choose an Excel file", type=["xlsx", "xls"])
+    tab1, tab2 = st.tabs(["📊 Use Our 20 Companies", "📁 Upload Your Own Excel"])
     
-    if uploaded_file is not None:
-        try:
-            raw_df = pd.read_excel(uploaded_file, header=None) # Read raw first
-            
-            # --- AUTO DETECT FORMAT ---
-            if "Metric" in raw_df.iloc[1].values or "Revenue" in raw_df.iloc[3].values:
-                st.info("Detected: VERTICAL Format - 1 Company")
-                format_type = "vertical"
-                user_df = pd.read_excel(uploaded_file, header=1) # Row 2 = headers
-                user_df = user_df.dropna().set_index("Metric")
-                
-                # Convert vertical to 1-row dataframe for processing
-                processed_df = pd.DataFrame([{
-                    "Company": user_df.loc["Company", "Value"] if "Company" in user_df.index else "Your_Company",
-                    "Revenue": float(user_df.loc["Revenue", "Value"]),
-                    "FCF_Margin": float(user_df.loc["EBITDA_Margin", "Value"]) if "EBITDA_Margin" in user_df.index else float(user_df.loc["FCF_Margin", "Value"]),
-                    "Analyst_Growth": float(user_df.loc["Growth", "Value"]) if "Growth" in user_df.index else float(user_df.loc["Analyst_Growth", "Value"]),
-                    "WACC": float(user_df.loc["WACC", "Value"]) if "WACC" in user_df.index else 0.11,
-                    "TV_Growth": float(user_df.loc["TV_Growth", "Value"]) if "TV_Growth" in user_df.index else 0.04,
-                    "Shares": float(user_df.loc["Shares", "Value"]) if "Shares" in user_df.index else 100,
-                    "CMP": float(user_df.loc["CMP", "Value"]) if "CMP" in user_df.index else 1000
-                }])
-                
-            else: # Assume Horizontal format
-                st.info("Detected: HORIZONTAL Format - Multi Company")
-                format_type = "horizontal"
-                processed_df = pd.read_excel(uploaded_file)
-                # Add defaults if missing
-                if "WACC" not in processed_df.columns: processed_df["WACC"] = 0.11
-                if "TV_Growth" not in processed_df.columns: processed_df["TV_Growth"] = 0.04
-                if "Shares" not in processed_df.columns: processed_df["Shares"] = 100
-            
-            st.success("File Read Successfully!")
-            st.dataframe(processed_df)
-            
-            company = st.selectbox("Select Company", processed_df["Company"])
-            selected_data = processed_df[processed_df["Company"] == company].iloc[0]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                cmp = st.number_input("Enter/Confirm CMP", value=float(selected_data["CMP"]), step=10.0)
-            with col2:
-                st.metric("Revenue", f"Rs.{float(selected_data['Revenue']):,.0f} Cr")
-            
-            st.divider()
+    # --- TAB 1: OUR 20 COMPANIES ---
+    with tab1:
+        st.write("Select from Nifty 50 companies. Data pre-loaded")
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            company = st.selectbox("Select Company", df["Company"])
+            cmp = st.number_input("Enter Current Market Price CMP", value=3950.00, step=10.0, key="cmp_prebuilt")
+            selected_data = df[df["Company"] == company].iloc[0]
+        
+        with col2:
             st.header("Set Your Assumptions")
-            user_growth = st.slider("YOUR Growth View", 0.0, 0.25, float(selected_data["Analyst_Growth"]), 0.01)
-            market_growth = st.slider("MARKET Implied Growth", 0.0, 0.25, 0.11, 0.01)
+            user_growth = st.slider("YOUR Growth View", 0.0, 0.25, 0.12, 0.01, key="user_g1")
+            market_growth = st.slider("MARKET Implied Growth", 0.0, 0.25, 0.11, 0.01, key="market_g1")
+            analyst_growth = st.slider("ANALYST Growth View", 0.0, 0.25, float(selected_data["Analyst_Growth"]), 0.01, key="analyst_g1")
             
-            def calc_fv_detailed(rev, margin, g, w, tv_g, sh):
-                fcf = rev * margin
-                g = min(g, 0.15)
-                fv = 0
-                for i in range(1, 6):
-                    fv += (fcf * (1+g)**i) / ((1+w)**i)
-                terminal_value = (fcf * (1+g)**5 * (1+tv_g)) / (w - tv_g)
-                fv += terminal_value / ((1+w)**5)
-                return fv / sh
-            
-            if st.button("RUN SCENARIO WAR", type="primary"):
-                rev = float(selected_data["Revenue"])
-                margin = float(selected_data["FCF_Margin"])
-                wacc = float(selected_data["WACC"])
-                tv_g = float(selected_data["TV_Growth"])
-                shares = float(selected_data["Shares"])
+            if st.button("RUN SCENARIO WAR", type="primary", key="run1"):
+                revenue = selected_data["Revenue"]
+                margin = selected_data["FCF_Margin"]
+                shares = 100 # default for prebuilt
                 
-                fv_user = calc_fv_detailed(rev, margin, user_growth, wacc, tv_g, shares)
-                fv_market = calc_fv_detailed(rev, margin, market_growth, wacc, tv_g, shares)
+                fv_user = calc_fv_detailed(revenue, margin, user_growth, 0.11, 0.04, shares)
+                fv_market = calc_fv_detailed(revenue, margin, market_growth, 0.11, 0.04, shares)
                 upside = ((fv_user - cmp) / cmp) * 100
                 
                 if upside > 15: rec = "BUY"; color = "🟢"
@@ -177,26 +131,103 @@ elif page == "Valuation Tool":
                 col2.metric("MARKET Implied FV", f"Rs.{fv_market:,.0f}")
                 col3.metric(f"{color} Verdict", f"{rec} {upside:.1f}%")
                 
-                # PRO FEATURE
-                st.divider()
-                st.subheader("📄 Get Pro Report")
-                if st.button(f"Download {company} PDF + Excel - Rs.499"):
-                    pdf_file = create_pdf(company, fv_user, cmp, rec, upside)
-                    excel_file = create_excel(company, fv_user, fv_market, cmp, upside, rec, user_growth, market_growth, selected_data["Analyst_Growth"])
-                    col1, col2 = st.columns(2)
-                    with col1: 
-                        with open(pdf_file, "rb") as file: st.download_button("⬇️ Download PDF", file, file_name=pdf_file)
-                    with col2: 
-                        with open(excel_file, "rb") as file: st.download_button("⬇️ Download Excel", file, file_name=excel_file)
-        
-        except Exception as e:
-            st.error(f"Error: {e}. Please check column names.")
-    
-    else:
-        st.info("👆 Upload your Excel to start")
-        st.download_button("⬇️ Download HORIZONTAL Template", pd.DataFrame({"Company":["TCS"],"Revenue":[240000],"FCF_Margin":[0.22],"Analyst_Growth":[0.09],"CMP":[2455]}).to_excel("h.xlsx", index=False), "Horizontal_Template.xlsx")
-        st.download_button("⬇️ Download VERTICAL Template", pd.DataFrame({"Metric":["Company","Revenue","EBITDA_Margin","Growth","WACC","TV_Growth","Shares","CMP"],"Value":["TCS",240000,0.24,0.09,0.11,0.04,364,2455]}).to_excel("v.xlsx", index=False), "Vertical_Template.xlsx")
+                show_download(company, fv_user, fv_market, cmp, upside, rec, user_growth, market_growth, analyst_growth)
 
+
+    # --- TAB 2: UPLOAD YOUR OWN EXCEL ---
+    with tab2:
+        st.write("Upload any format: Multi-company table OR Single-company vertical sheet")
+        uploaded_file = st.file_uploader("📁 Choose an Excel file", type=["xlsx", "xls"], key="uploader")
+        
+        if uploaded_file is not None:
+            try:
+                raw_df = pd.read_excel(uploaded_file, header=None)
+                first_col = raw_df.iloc[:, 0].astype(str).tolist()
+                
+                # --- SMARTER AUTO DETECT ---
+                if any("Company" in x for x in first_col) and any("Revenue" in x for x in first_col):
+                    st.success("Detected: VERTICAL Format - 1 Company")
+                    data_dict = {}
+                    for i in range(len(raw_df)):
+                        key = str(raw_df.iloc[i, 0]).strip()
+                        val = raw_df.iloc[i, 1]
+                        if key!= "nan" and pd.notna(val): data_dict[key] = val
+                    
+                    processed_df = pd.DataFrame([{
+                        "Company": data_dict.get("Company name", "Your_Company"),
+                        "Revenue": float(data_dict.get("Revenue CR", 0)),
+                        "FCF_Margin": float(data_dict.get("FCF Margin %", 0.2)),
+                        "Analyst_Growth": float(data_dict.get("Growth %", 0.1)),
+                        "WACC": float(data_dict.get("WACC", 0.11)),
+                        "TV_Growth": float(data_dict.get("TV_Growth", 0.04)),
+                        "Shares": float(data_dict.get("Share CR", 100)),
+                        "CMP": float(data_dict.get("Current Price", 1000))
+                    }])
+                    
+                else: # Horizontal
+                    st.success("Detected: HORIZONTAL Format - Multi Company")
+                    processed_df = pd.read_excel(uploaded_file)
+                
+                st.dataframe(processed_df)
+                
+                company = st.selectbox("Select Company from your file", processed_df["Company"], key="comp_upload")
+                selected_data = processed_df[processed_df["Company"] == company].iloc[0]
+                
+                col1, col2 = st.columns(2)
+                with col1: cmp = st.number_input("Enter/Confirm CMP", value=float(selected_data["CMP"]), step=10.0, key="cmp_upload")
+                with col2: st.metric("Revenue", f"Rs.{float(selected_data['Revenue']):,.0f} Cr")
+                
+                user_growth = st.slider("YOUR Growth View", 0.0, 0.25, float(selected_data["Analyst_Growth"]), 0.01, key="user_g2")
+                market_growth = st.slider("MARKET Implied Growth", 0.0, 0.25, 0.11, 0.01, key="market_g2")
+                
+                if st.button("RUN SCENARIO WAR", type="primary", key="run2"):
+                    rev, margin = float(selected_data["Revenue"]), float(selected_data["FCF_Margin"])
+                    wacc, tv_g, shares = float(selected_data["WACC"]), float(selected_data["TV_Growth"]), float(selected_data["Shares"])
+                    
+                    fv_user = calc_fv_detailed(rev, margin, user_growth, wacc, tv_g, shares)
+                    fv_market = calc_fv_detailed(rev, margin, market_growth, wacc, tv_g, shares)
+                    upside = ((fv_user - cmp) / cmp) * 100
+                    
+                    if upside > 15: rec = "BUY"; color = "🟢"
+                    elif upside < -15: rec = "SELL"; color = "🔴"
+                    else: rec = "HOLD"; color = "🟡"
+                    
+                    st.session_state.update({"fv": fv_user, "cmp": cmp, "upside": upside, "rec": rec, "company": company})
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("YOUR Fair Value", f"Rs.{fv_user:,.0f}")
+                    col2.metric("MARKET Implied FV", f"Rs.{fv_market:,.0f}")
+                    col3.metric(f"{color} Verdict", f"{rec} {upside:.1f}%")
+                    
+                    show_download(company, fv_user, fv_market, cmp, upside, rec, user_growth, market_growth, selected_data["Analyst_Growth"])
+            
+            except Exception as e:
+                st.error(f"Error: {e}")
+        
+        else:
+            st.info("👆 Upload your Excel to start")
+
+# --- HELPER FUNCTIONS ---
+def calc_fv_detailed(rev, margin, g, w, tv_g, sh):
+    fcf = rev * margin
+    g = min(g, 0.15)
+    fv = 0
+    for i in range(1, 6): fv += (fcf * (1+g)**i) / ((1+w)**i)
+    terminal_value = (fcf * (1+g)**5 * (1+tv_g)) / (w - tv_g)
+    fv += terminal_value / ((1+w)**5)
+    return fv / sh
+
+def show_download(company, fv_user, fv_market, cmp, upside, rec, user_g, market_g, analyst_g):
+    st.divider()
+    st.subheader("📄 Get Pro Report")
+    if st.button(f"Download {company} PDF + Excel - Rs.499"):
+        pdf_file = create_pdf(company, fv_user, cmp, rec, upside)
+        excel_file = create_excel(company, fv_user, fv_market, cmp, upside, rec, user_g, market_g, analyst_g)
+        col1, col2 = st.columns(2)
+        with col1: 
+            with open(pdf_file, "rb") as file: st.download_button("⬇️ Download PDF", file, file_name=pdf_file)
+        with col2: 
+            with open(excel_file, "rb") as file: st.download_button("⬇️ Download Excel", file, file_name=excel_file)
 # --- PAGE 3: PRICING ---
 elif page == "Pricing":
     st.title("Simple, Transparent Pricing")
