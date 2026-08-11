@@ -41,10 +41,14 @@ def create_pdf(company, fv, cmp, rec):
 
 # --- MOCK DATA ---
 data = {
-    "Company": ["TCS", "WIPRO", "INFY"],
-    "Revenue": [240000, 91000, 153000],
-    "FCF_Margin": [0.22, 0.18, 0.24],
-    "Analyst_Growth": [0.09, 0.09, 0.10]
+    "Company": ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICIBANK", "HINDUNILVR", "BHARTIARTL", "ITC", "SBIN", "LT",
+                "KOTAKBANK", "AXISBANK", "ASIANPAINT", "MARUTI", "BAJFINANCE", "WIPRO", "NESTLEIND", "ULTRACEMCO", "TITAN", "SUNPHARMA"],
+    "Revenue": [1000000, 240000, 220000, 153000, 210000, 65000, 160000, 68000, 380000, 210000,
+                180000, 140000, 38000, 120000, 28000, 91000, 90000, 68000, 48000, 52000],
+    "FCF_Margin": [0.12, 0.22, 0.25, 0.24, 0.25, 0.20, 0.18, 0.22, 0.20, 0.10,
+                   0.22, 0.23, 0.18, 0.08, 0.30, 0.18, 0.22, 0.15, 0.16, 0.18],
+    "Analyst_Growth": [0.12, 0.09, 0.14, 0.10, 0.15, 0.08, 0.11, 0.07, 0.12, 0.13,
+                       0.14, 0.15, 0.09, 0.10, 0.18, 0.09, 0.08, 0.10, 0.11, 0.12]
 }
 df = pd.DataFrame(data)
 
