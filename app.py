@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime
 import io
 
-st.set_page_config(page_title="Valuiy PRO V4.0 - DCF Calculator", layout="wide")
-st.title("Valuiy PRO V4.0 - AI Valuation Platform")
+st.set_page_config(page_title="Valuiy PRO V4.2 - DCF Calculator", layout="wide")
+st.title("Valuiy PRO V4.2 - AI Valuation Platform")
 st.caption("Powered by Live NSE Data via Yahoo Finance | Not SEBI Registered")
 
 # NIFTY 50 LIST
@@ -93,43 +93,33 @@ def single_stock_dcf():
 
 def portfolio_war_room():
     st.header("⚔️ Portfolio War Room - PRO")
-    st.info("Upload Excel with columns: Company name, Ticker, Share CR, Revenue CR, FCF CR, Growth %, FCF Margin %")
-    
-    # SAMPLE EXCEL DOWNLOAD
-    sample_data = {
-        'Company name': ['TCS', 'RELIANCE', 'HDFCBANK'],
-        'Ticker': ['TCS.NS', 'RELIANCE.NS', 'HDFCBANK.NS'],
-        'Share CR': [365, 250, 600],
-        'Revenue CR': [200000, 800000, 250000],
-        'FCF CR': [40000, 90000, 50000],
-        'Growth %': [0.10, 0.12, 0.11],
-        'FCF Margin %': [0.20, 0.11, 0.20]
-    }
-    sample_df = pd.DataFrame(sample_data)
-    excel_buffer = io.BytesIO()
-    sample_df.to_excel(excel_buffer, index=False, engine='openpyxl')
-    st.download_button("📥 Download Sample Excel Format", excel_buffer.getvalue(), "sample_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    
-    st.markdown("---")
+    st.warning("Use Row 1 for Headers. Required: Company name, Ticker, Share CR, Revenue CR, FCF CR, Growth %, FCF Margin %")
     
     uploaded_file = st.file_uploader("Upload your Excel/CSV", type=['xlsx','csv'])
     
     if uploaded_file is not None:
         try:
-            df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
-            st.write("**Detected Columns:**", df.columns.tolist()) # DEBUG LINE
+            # FORCE READ ROW 1 AS HEADERS
+            if uploaded_file.name.endswith('xlsx'):
+                df = pd.read_excel(uploaded_file, header=0, skip_blank_lines=True)
+            else:
+                df = pd.read_csv(uploaded_file, header=0, skip_blank_lines=True)
+            
+            # CLEAN COLUMN NAMES
+            df.columns = df.columns.str.strip()
+            st.write("**Detected Columns:**", df.columns.tolist())
         except Exception as e:
             st.error(f"Can't read file: {e}")
             return
         
-        # BULLETPROOF COLUMN MAPPING
+        # BULLETPROOF COLUMN MAPPING FOR YOUR EXCEL
         column_map = {
-            'Company name': 'Company', 'Company Name': 'Company', 'Company': 'Company',
-            'Ticker': 'Ticker',
-            'Share CR': 'Shares', 'Shares Cr': 'Shares', 'Shares': 'Shares',
-            'Revenue CR': 'Revenue_Cr', 'Revenue Cr': 'Revenue_Cr', 'Revenue': 'Revenue_Cr',
-            'FCF CR': 'FCF_Cr', 'FCF Cr': 'FCF_Cr', 'FCF': 'FCF_Cr',
-            'Growth %': 'Growth', 'Growth': 'Growth',
+            'Company name': 'Company', 'Company Name': 'Company', 'Company': 'Company', 'company': 'Company',
+            'Ticker': 'Ticker', 'ticker': 'Ticker',
+            'Share CR': 'Shares', 'Shares Cr': 'Shares', 'Shares': 'Shares', 'shares': 'Shares',
+            'Revenue CR': 'Revenue_Cr', 'Revenue Cr': 'Revenue_Cr', 'Revenue': 'Revenue_Cr', 'revenue': 'Revenue_Cr',
+            'FCF CR': 'FCF_Cr', 'FCF Cr': 'FCF_Cr', 'FCF': 'FCF_Cr', 'fcf': 'FCF_Cr',
+            'Growth %': 'Growth', 'Growth': 'Growth', 'growth': 'Growth',
             'FCF Margin %': 'FCF_Margin', 'FCF Margin': 'FCF_Margin', 'FCF_Margin': 'FCF_Margin'
         }
         
@@ -140,14 +130,19 @@ def portfolio_war_room():
         missing = [col for col in required_cols if col not in df.columns]
         if missing:
             st.error(f"❌ Missing columns in your Excel: {missing}")
-            st.info("Please download the Sample Excel above and use that format")
+            st.info("Please ensure Row 1 has: Company name, Ticker, Share CR, Revenue CR, FCF CR, Growth %, FCF Margin %")
             return
+        
+        # DROP EMPTY ROWS
+        df = df.dropna(subset=['Company', 'Ticker'])
         
         results = []
         progress = st.progress(0)
         for index, row in df.iterrows():
             try:
                 ticker = str(row['Ticker']).strip()
+                if not ticker.endswith('.NS'): ticker = ticker + '.NS' # Auto-add .NS
+                
                 company = str(row['Company']).strip()
                 
                 cmp = get_live_cmp(ticker)
@@ -175,6 +170,7 @@ def portfolio_war_room():
             
             csv = result_df.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Download Results Excel", csv, "valuiy_results.csv", "text/csv")
+
 # TABS
 tab1, tab2 = st.tabs(["Single Stock", "Portfolio War Room"])
 
@@ -184,4 +180,4 @@ with tab2:
     portfolio_war_room()
 
 st.markdown("---")
-st.caption("Valuiy PRO V4.0 | Disclaimer: For educational purposes only. Data delayed by ~15min.")
+st.caption("Valuiy PRO V4.2 | Disclaimer: For educational purposes only. Data delayed by ~15min.")
