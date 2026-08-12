@@ -98,6 +98,33 @@ def portfolio_war_room():
             with st.spinner("Running DCF on all stocks..."):
                 results = []
                 for index, row in df.iterrows():
+                    NIFTY50 = {
+    "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "HDFCBANK": "HDFCBANK.NS", 
+    "ICIBANK": "ICICIBANK.NS", "BHARTIARTL": "BHARTIARTL.NS",
+    "INFY": "INFY.NS", "ITC": "ITC.NS", "SBIN": "SBIN.NS",
+    "KOTAKBANK": "KOTAKBANK.NS", "LT": "LT.NS"
+    # ... add all 50 here. I can give you full list
+}
+
+col1, col2 = st.columns(2)
+with col1:
+    selected_company = st.selectbox("Pick from NIFTY 50", ["Custom Ticker"] + list(NIFTY50.keys()))
+with col2:
+    if selected_company == "Custom Ticker":
+        ticker = st.text_input("Or Enter Ticker", "TCS.NS")
+    else:
+        ticker = NIFTY50[selected_company]
+        st.text_input("Ticker", ticker, disabled=True)
+        # Rename columns to match our code
+df = df.rename(columns={
+    'Company name': 'Company',
+    'Share CR': 'Shares', 
+    'Revenue CR': 'Revenue_Cr',
+    'FCF CR': 'FCF_Cr',
+    'Growth %': 'Growth',
+    'FCF Margin %': 'FCF_Margin',
+    'Current Price': 'Current_Price'
+})
                     ticker = row['Ticker']
                     buy_price = row['Buy Price']
                     data = get_live_data(ticker)
