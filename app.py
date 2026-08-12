@@ -108,7 +108,6 @@ def portfolio_war_room():
     sample_df = pd.DataFrame(sample_data)
     excel_buffer = io.BytesIO()
     sample_df.to_excel(excel_buffer, index=False, engine='openpyxl')
-    
     st.download_button("📥 Download Sample Excel Format", excel_buffer.getvalue(), "sample_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     
     st.markdown("---")
@@ -116,27 +115,44 @@ def portfolio_war_room():
     uploaded_file = st.file_uploader("Upload your Excel/CSV", type=['xlsx','csv'])
     
     if uploaded_file is not None:
-        df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
+        try:
+            df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
+            st.write("**Detected Columns:**", df.columns.tolist()) # DEBUG LINE
+        except Exception as e:
+            st.error(f"Can't read file: {e}")
+            return
         
-        df = df.rename(columns={
-            'Company name': 'Company', 'Company Name': 'Company',
-            'Share CR': 'Shares', 'Shares Cr': 'Shares',
-            'Revenue CR': 'Revenue_Cr', 'Revenue Cr': 'Revenue_Cr',
-            'FCF CR': 'FCF_Cr', 'FCF Cr': 'FCF_Cr',
+        # BULLETPROOF COLUMN MAPPING
+        column_map = {
+            'Company name': 'Company', 'Company Name': 'Company', 'Company': 'Company',
+            'Ticker': 'Ticker',
+            'Share CR': 'Shares', 'Shares Cr': 'Shares', 'Shares': 'Shares',
+            'Revenue CR': 'Revenue_Cr', 'Revenue Cr': 'Revenue_Cr', 'Revenue': 'Revenue_Cr',
+            'FCF CR': 'FCF_Cr', 'FCF Cr': 'FCF_Cr', 'FCF': 'FCF_Cr',
             'Growth %': 'Growth', 'Growth': 'Growth',
-            'FCF Margin %': 'FCF_Margin', 'FCF Margin': 'FCF_Margin'
-        })
+            'FCF Margin %': 'FCF_Margin', 'FCF Margin': 'FCF_Margin', 'FCF_Margin': 'FCF_Margin'
+        }
+        
+        df = df.rename(columns=column_map)
+        
+        # CHECK IF REQUIRED COLUMNS EXIST
+        required_cols = ['Company', 'Ticker', 'Shares', 'Revenue_Cr', 'FCF_Cr', 'Growth']
+        missing = [col for col in required_cols if col not in df.columns]
+        if missing:
+            st.error(f"❌ Missing columns in your Excel: {missing}")
+            st.info("Please download the Sample Excel above and use that format")
+            return
         
         results = []
         progress = st.progress(0)
         for index, row in df.iterrows():
             try:
-                ticker = row['Ticker']
-                company = row['Company']
+                ticker = str(row['Ticker']).strip()
+                company = str(row['Company']).strip()
                 
                 cmp = get_live_cmp(ticker)
-                ev = dcf_model(row['FCF_Cr'], row['Growth'], 5, 0.12, 0.05)
-                iv = ev / row['Shares']
+                ev = dcf_model(float(row['FCF_Cr']), float(row['Growth']), 5, 0.12, 0.05)
+                iv = ev / float(row['Shares'])
                 
                 upside = ((iv - cmp) / cmp) * 100 if cmp > 0 else 0
                 action = "BUY" if upside > 20 else "HOLD" if upside > -10 else "SELL"
@@ -150,15 +166,15 @@ def portfolio_war_room():
                     'Action': action
                 })
             except Exception as e:
-                st.error(f"Error with {row['Company']}: {e}")
+                st.error(f"Error with row {index+1} {row.get('Company','Unknown')}: {e}")
             progress.progress((index+1)/len(df))
         
-        result_df = pd.DataFrame(results)
-        st.dataframe(result_df, use_container_width=True)
-        
-        csv = result_df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Results Excel", csv, "valuiy_results.csv", "text/csv")
-
+        if results:
+            result_df = pd.DataFrame(results)
+            st.dataframe(result_df, use_container_width=True)
+            
+            csv = result_df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Download Results Excel", csv, "valuiy_results.csv", "text/csv")
 # TABS
 tab1, tab2 = st.tabs(["Single Stock", "Portfolio War Room"])
 
