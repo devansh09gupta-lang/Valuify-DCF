@@ -2,12 +2,13 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
+import io
 
-st.set_page_config(page_title="Valuiy PRO - DCF Calculator", layout="wide")
+st.set_page_config(page_title="Valuiy PRO V4.0 - DCF Calculator", layout="wide")
+st.title("Valuiy PRO V4.0 - AI Valuation Platform")
+st.caption("Powered by Live NSE Data via Yahoo Finance | Not SEBI Registered")
 
-# Simple Pro Lock - Change this after Razorpay
-PRO_PASSWORD = "valuiypro2026"
-
+# NIFTY 50 LIST
 NIFTY50 = {
     "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "HDFCBANK": "HDFCBANK.NS", 
     "ICIBANK": "ICIBANK.NS", "BHARTIARTL": "BHARTIARTL.NS", "INFY": "INFY.NS", 
@@ -28,7 +29,6 @@ NIFTY50 = {
 }
 
 def dcf_model(fcf, growth, years, discount_rate, terminal_growth):
-    """Simple 2-stage DCF"""
     fcf_forecast = [fcf * (1 + growth)**i for i in range(1, years+1)]
     pv_forecast = [fcf / (1 + discount_rate)**i for i, fcf in enumerate(fcf_forecast, 1)]
     
@@ -39,6 +39,15 @@ def dcf_model(fcf, growth, years, discount_rate, terminal_growth):
     enterprise_value = sum(pv_forecast) + pv_terminal
     return enterprise_value
 
+def get_live_cmp(ticker):
+    try:
+        ticker_data = yf.Ticker(ticker)
+        cmp = ticker_data.info.get('currentPrice', 0)
+        if cmp == 0: cmp = ticker_data.info.get('regularMarketPrice', 0)
+        return cmp
+    except:
+        return 0
+
 def single_stock_dcf():
     st.header("📈 Single Stock DCF")
     
@@ -47,24 +56,13 @@ def single_stock_dcf():
         selected_company = st.selectbox("Pick from NIFTY 50", ["Custom Ticker"] + list(NIFTY50.keys()))
     with col2:
         if selected_company == "Custom Ticker":
-            ticker = st.text_input("Or Enter Ticker", "TCS.NS")
-            company = st.text_input("Company Name", "Custom")
+            ticker = st.text_input("Or Enter Ticker", "TCS.NS").upper()
         else:
             ticker = NIFTY50[selected_company]
-            company = selected_company
             st.text_input("Ticker", ticker, disabled=True)
     
-    # Get Live CMP
-    last_updated = ""
-    try:
-        ticker_data = yf.Ticker(ticker)
-        cmp = ticker_data.info.get('currentPrice', 0)
-        if cmp == 0: cmp = ticker_data.info.get('regularMarketPrice', 0)
-        last_updated = datetime.now().strftime("%H:%M:%S")
-    except:
-        cmp = 0
-    
-    st.metric("Live CMP", f"₹{cmp:,.2f}" if cmp > 0 else "N/A", f"Updated: {last_updated}")
+    cmp = get_live_cmp(ticker)
+    st.metric("Live CMP", f"₹{cmp:,.2f}" if cmp > 0 else "Fetching...", f"Updated: {datetime.now().strftime('%H:%M:%S')}")
     
     col3, col4 = st.columns(2)
     with col3:
@@ -81,10 +79,10 @@ def single_stock_dcf():
             ev = dcf_model(fcf_cr, growth, 5, 0.12, 0.05)
             intrinsic_value = ev / shares_cr
             
-            st.success(f"Intrinsic Value: ₹{intrinsic_value:,.2f}")
+            st.success(f"**Intrinsic Value: ₹{intrinsic_value:,.2f}**")
             if cmp > 0:
                 upside = ((intrinsic_value - cmp) / cmp) * 100
-                st.info(f"Upside/Downside: {upside:.2f}%")
+                st.info(f"**Upside/Downside: {upside:.2f}%**")
                 
                 if upside > 20:
                     st.markdown("### **VERDICT: BUY** 🟢")
@@ -95,28 +93,38 @@ def single_stock_dcf():
 
 def portfolio_war_room():
     st.header("⚔️ Portfolio War Room - PRO")
-    st.write("Upload Excel with columns: Company name, Ticker, Share CR, Revenue CR, FCF CR, Growth %, FCF Margin %")
+    st.info("Upload Excel with columns: Company name, Ticker, Share CR, Revenue CR, FCF CR, Growth %, FCF Margin %")
     
-    # PRO LOCK
-    password = st.text_input("Enter Pro Password", type="password")
-    if password != PRO_PASSWORD:
-        st.warning("This is a PRO feature. Enter password to continue.")
-        return
+    # SAMPLE EXCEL DOWNLOAD
+    sample_data = {
+        'Company name': ['TCS', 'RELIANCE', 'HDFCBANK'],
+        'Ticker': ['TCS.NS', 'RELIANCE.NS', 'HDFCBANK.NS'],
+        'Share CR': [365, 250, 600],
+        'Revenue CR': [200000, 800000, 250000],
+        'FCF CR': [40000, 90000, 50000],
+        'Growth %': [0.10, 0.12, 0.11],
+        'FCF Margin %': [0.20, 0.11, 0.20]
+    }
+    sample_df = pd.DataFrame(sample_data)
+    excel_buffer = io.BytesIO()
+    sample_df.to_excel(excel_buffer, index=False, engine='openpyxl')
+    
+    st.download_button("📥 Download Sample Excel Format", excel_buffer.getvalue(), "sample_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    
+    st.markdown("---")
     
     uploaded_file = st.file_uploader("Upload your Excel/CSV", type=['xlsx','csv'])
     
     if uploaded_file is not None:
         df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
         
-        # FIX: Rename columns to match our code
         df = df.rename(columns={
-            'Company name': 'Company',
-            'Share CR': 'Shares', 
-            'Revenue CR': 'Revenue_Cr',
-            'FCF CR': 'FCF_Cr',
-            'Growth %': 'Growth',
-            'FCF Margin %': 'FCF_Margin',
-            'Current Price': 'Current_Price'
+            'Company name': 'Company', 'Company Name': 'Company',
+            'Share CR': 'Shares', 'Shares Cr': 'Shares',
+            'Revenue CR': 'Revenue_Cr', 'Revenue Cr': 'Revenue_Cr',
+            'FCF CR': 'FCF_Cr', 'FCF Cr': 'FCF_Cr',
+            'Growth %': 'Growth', 'Growth': 'Growth',
+            'FCF Margin %': 'FCF_Margin', 'FCF Margin': 'FCF_Margin'
         })
         
         results = []
@@ -126,12 +134,7 @@ def portfolio_war_room():
                 ticker = row['Ticker']
                 company = row['Company']
                 
-                # Get Live CMP
-                ticker_data = yf.Ticker(ticker)
-                cmp = ticker_data.info.get('currentPrice', 0)
-                if cmp == 0: cmp = ticker_data.info.get('regularMarketPrice', 0)
-                
-                # Run DCF
+                cmp = get_live_cmp(ticker)
                 ev = dcf_model(row['FCF_Cr'], row['Growth'], 5, 0.12, 0.05)
                 iv = ev / row['Shares']
                 
@@ -140,6 +143,7 @@ def portfolio_war_room():
                 
                 results.append({
                     'Company': company, 
+                    'Ticker': ticker,
                     'CMP': round(cmp,2),
                     'IV': round(iv,2), 
                     'Upside %': round(upside,2),
@@ -149,13 +153,13 @@ def portfolio_war_room():
                 st.error(f"Error with {row['Company']}: {e}")
             progress.progress((index+1)/len(df))
         
-        st.dataframe(pd.DataFrame(results), use_container_width=True)
-        st.download_button("Download Results CSV", pd.DataFrame(results).to_csv(index=False), "valuiy_results.csv")
+        result_df = pd.DataFrame(results)
+        st.dataframe(result_df, use_container_width=True)
+        
+        csv = result_df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Results Excel", csv, "valuiy_results.csv", "text/csv")
 
-# MAIN APP
-st.title("Valuiy PRO - AI Valuation Platform")
-st.caption("Powered by Live NSE Data via Yahoo Finance")
-
+# TABS
 tab1, tab2 = st.tabs(["Single Stock", "Portfolio War Room"])
 
 with tab1:
@@ -164,4 +168,4 @@ with tab2:
     portfolio_war_room()
 
 st.markdown("---")
-st.caption("Disclaimer: Not SEBI registered. For educational purposes only. Data delayed by ~15min from NSE.")
+st.caption("Valuiy PRO V4.0 | Disclaimer: For educational purposes only. Data delayed by ~15min.")
