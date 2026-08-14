@@ -312,32 +312,58 @@ def create_excel(company, fv_user, fv_market, cmp, upside, rec):
     return output
 
 
-# Shared column mapping for any uploaded sheet (Valuation Tool tab2 + Portfolio Room)
+# Shared column mapping for any uploaded sheet (Valuation Tool tab2 + Portfolio Room).
+# Matching is done on a NORMALIZED form of the header (lowercased, stripped,
+# spaces/underscores/%/collapsed) so "FCF Margin %", "fcf_margin", "FCF  Margin"
+# etc. all resolve to the same target column instead of silently failing to match.
 UPLOAD_COLUMN_MAP = {
-    'Company name': 'Company', 'Company Name': 'Company', 'Company': 'Company',
-    'Ticker': 'Ticker',
-    'Revenue': 'Revenue', 'Revenue CR': 'Revenue', 'Revenue Cr': 'Revenue',
-    'FCF_Margin': 'FCF_Margin', 'FCF Margin': 'FCF_Margin', 'FCF Margin %': 'FCF_Margin',
-    'Growth': 'Growth', 'Growth %': 'Growth',
-    'WACC': 'WACC', 'WACC %': 'WACC',
-    'TV_Growth': 'TV_Growth', 'TV Growth': 'TV_Growth', 'Terminal Growth': 'TV_Growth',
-    'Shares': 'Shares', 'Shares Cr': 'Shares', 'Share CR': 'Shares',
-    'CMP': 'CMP',
+    'companyname': 'Company', 'company': 'Company',
+    'ticker': 'Ticker', 'symbol': 'Ticker',
+    'revenue': 'Revenue', 'revenuecr': 'Revenue',
+    'fcfmargin': 'FCF_Margin',
+    'growth': 'Growth',
+    'wacc': 'WACC', 'discountrate': 'WACC',
+    'tvgrowth': 'TV_Growth', 'terminalgrowth': 'TV_Growth',
+    'shares': 'Shares', 'sharescr': 'Shares',
+    'cmp': 'CMP', 'currentprice': 'CMP', 'price': 'CMP',
 }
 UPLOAD_REQUIRED_COLS = ['Company', 'Revenue', 'FCF_Margin', 'Growth', 'WACC', 'TV_Growth', 'Shares']
 
 
+def _normalize_header(name: str) -> str:
+    return (
+        str(name).strip().lower()
+        .replace('%', '')
+        .replace('_', '')
+        .replace(' ', '')
+        .replace('-', '')
+    )
+
+
 def load_and_map_upload(uploaded_file):
-    """Read an uploaded xlsx/csv, map columns, validate. Returns (df, error_str)."""
+    """Read an uploaded xlsx/csv, map columns (case/spacing-insensitive), validate.
+    Returns (df, error_str)."""
     try:
         raw = pd.read_excel(uploaded_file) if uploaded_file.name.endswith(('xlsx', 'xls')) else pd.read_csv(uploaded_file)
     except Exception as e:
         return None, f"Can't read file: {e}"
 
-    raw = raw.rename(columns=UPLOAD_COLUMN_MAP)
+    original_columns = raw.columns.tolist()
+    rename = {}
+    for col in original_columns:
+        target = UPLOAD_COLUMN_MAP.get(_normalize_header(col))
+        if target:
+            rename[col] = target
+    raw = raw.rename(columns=rename)
+
     missing = [c for c in UPLOAD_REQUIRED_COLS if c not in raw.columns]
     if missing:
-        return None, f"Missing columns: {missing}. Required: {UPLOAD_REQUIRED_COLS} (Ticker and CMP optional)."
+        return None, (
+            f"Missing columns: {missing}.\n\n"
+            f"Your file's actual headers: {original_columns}\n\n"
+            f"Required (any reasonable spelling/casing works): {UPLOAD_REQUIRED_COLS} "
+            f"(Ticker and CMP optional)."
+        )
     if len(raw) == 0:
         return None, "File has no rows."
     return raw, None
