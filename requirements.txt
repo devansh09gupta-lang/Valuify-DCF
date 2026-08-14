@@ -1,6 +1,8 @@
 streamlit
 pandas
-openpyxl
+numpy
 reportlab
 plotly
 yfinance
+openpyxl
+supabase
